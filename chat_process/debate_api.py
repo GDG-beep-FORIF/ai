@@ -24,16 +24,15 @@ app = FastAPI(title="페르소나 토론 채팅 API")
 # UUID 타입 등록
 register_uuid()
 
-# API 기본 URL 설정
-PERSONA_API_BASE = os.getenv("PERSONA_API_BASE")
+PERSONA_API_BASE = "https://port-0-back-m1ung2x3f53d462a.sel4.cloudtype.app"
 
-# 데이터베이스 설정
+# Database configuration
 DATABASE_CONFIG = {
     "dbname": "postgres",
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "host": os.getenv("DB_URL"),
-    "port": "6543",
+    "user": "postgres.baeuipvrxxdsidfkwmvn",
+    "password": "4CipIRLuLkYavf3X",
+    "host": "aws-0-ap-northeast-2.pooler.supabase.com",
+    "port": "6543"
 }
 
 
@@ -138,7 +137,7 @@ class DialogueSystem:
 현재 턴이 {turn + 1}/{num_turns * 2}입니다. 마지막 턴에 가까워질수록 대화를 자연스럽게 마무리해주세요."""
 
             response = client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o",
                 messages=dialogue_messages + [{"role": "user", "content": prompt}],
             )
 
@@ -271,11 +270,76 @@ async def fetch_persona_id_by_name(name: str) -> uuid.UUID:
 # 웹소켓 엔드포인트
 @app.websocket("/ws/{room_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: uuid.UUID):
-    print(f"Attempting to connect to room: {room_id}")  # 디버깅용 로그
+    print(f"Attempting to connect to room: {room_id}")
     await manager.connect(websocket, room_id)
     try:
         while True:
-            await websocket.receive_text()  # 클라이언트의 메시지 대기
+            # 클라이언트로부터 메시지 수신
+            data = await websocket.receive_json()  # JSON 형태로 메시지 수신
+            
+            # 필요한 데이터 추출
+            content = data.get("content")
+            user_id = uuid.UUID(data.get("user_id"))
+            
+            conn = get_db_connection()
+            try:
+                # 사용자 메시지 저장 및 브로드캐스트
+                await save_and_broadcast_message(
+                    conn, room_id, "USER", user_id, content
+                )
+
+                # 채팅방의 페르소나 정보 조회
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    SELECT p.* FROM chat_room_persons crp
+                    JOIN basic_info p ON crp.person_id = p.person_id
+                    WHERE crp.room_id = %s
+                    """,
+                    (room_id,)
+                )
+                personas = cur.fetchall()
+                print(personas[0]["person_id"])
+                # API에서 페르소나 정보 조회
+                persona1_data = await fetch_persona_data(personas[0]["person_id"])
+                print(persona1_data)
+                persona2_data = await fetch_persona_data(personas[1]["person_id"])
+                print(persona2_data)
+
+                # DialogueSystem을 사용하여 토론 응답 생성
+                dialogue_system = DialogueSystem(
+                    persona1_data,
+                    persona2_data,
+                    connection_manager=manager,
+                    room_id=room_id,
+                )
+
+                # 대화 생성 - websocket을 통해 자동으로 브로드캐스트됨
+                dialogue, summary = await dialogue_system.generate_dialogue(
+                    content, num_turns=3
+                )
+
+                # 요약 메시지 전송
+                await manager.broadcast_to_room(
+                    {
+                        "type": "summary",
+                        "content": summary,
+                        "timestamp": datetime.now().isoformat()
+                    },
+                    room_id
+                )
+
+                conn.commit()
+
+            except Exception as e:
+                conn.rollback()
+                await websocket.send_json({
+                    "type": "error",
+                    "message": str(e)
+                })
+            finally:
+                conn.close()
+
     except WebSocketDisconnect:
         manager.disconnect(websocket, room_id)
 
