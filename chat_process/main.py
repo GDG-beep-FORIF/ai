@@ -90,7 +90,7 @@ class DialogueSystem:
         페르소나 간 대화 생성 및 요약
         """
 
-        system_prompt = f"""당신은 두 역사적 인물 간의 대화를 생성해야 합니다.
+        system_prompt = f"""당신은 두 인물 간의 대화를 생성해야 합니다.
         
 첫 번째 페르소나:
 {self.persona1.get_prompt_context()}
@@ -98,15 +98,17 @@ class DialogueSystem:
 두 번째 페르소나:
 {self.persona2.get_prompt_context()}
 
-사용자의 고민: {user_concern}
+사용자의 질문: {user_concern}
 
 다음 지침을 따라 대화를 생성하세요:
-1. 각 페르소나는 자신의 경험과 관점에서 사용자의 고민에 대해 조언해야 합니다.
+1. 각 페르소나는 자신의 경험과 관점에서 사용자의 질문에 대해 답변해야 합니다.
 2. 대화는 자연스럽게 이어져야 하며, 각자의 시대적 배경과 가치관이 반영되어야 합니다.
 3. 페르소나의 성격 특성과 말투를 반영하여 대화를 생성하세요.
-4. 역사적 맥락과 개인적 경험을 연결지어 조언하도록 합니다.
+4. 역사적 맥락과 개인적 경험을 연결지어 답변하도록 합니다.
 5. 서로의 의견에 대해 건설적으로 토론하고 보완하는 방식으로 대화를 진행하세요.
-6. 최종적으로 두 사람의 관점을 종합하여 유익한 조언을 제공하세요."""
+6. 최종적으로 두 사람의 관점을 종합하여 유익한 조언을 제공하세요
+
+반드시 사용자의 고민에 대한 올바른 조언을 포함해야 합니다."""
 
         dialogue_messages = [{"role": "system", "content": system_prompt}]
 
@@ -123,6 +125,8 @@ class DialogueSystem:
 상대 페르소나는 {other_persona.basic_info.get('name')}입니다.
 
 이전 대화를 고려하여, {current_persona.basic_info.get('name')}의 관점에서 대화를 이어가세요.
+반드시 {current_persona.basic_info.get('name')}의 대화만 생성해야 합니다.
+
 페르소나의 시대적 배경, 경험, 성격을 반영한 자연스러운 대화를 생성해주세요.
 현재 턴이 {turn + 1}/{num_turns * 2}입니다. 마지막 턴에 가까워질수록 대화를 자연스럽게 마무리해주세요."""
 
@@ -135,6 +139,9 @@ class DialogueSystem:
             content = response.choices[0].message.content
             speaker_name = current_persona.basic_info.get("name")
             content = content.replace(f"{speaker_name}: ", "")
+
+            # GPT 응답에서 양 끝의 큰따옴표 제거
+            content = content.strip('"')
 
             dialogue_turn = {
                 "speaker": speaker_name,
@@ -172,7 +179,7 @@ class DialogueSystem:
 - 사용자에게 도움이 될 만한 주요 조언들
 
 ## 결론
-사용자의 고민이나 질문에 대한 최종 조언 요약"""
+사용자의 고민에 대한 최종 조언 요약"""
 
         summary_response = client.chat.completions.create(
             model="gpt-4o",
@@ -342,8 +349,8 @@ def main():
 
     dialogue_system = DialogueSystem(persona1, persona2)
 
-    # 임시 사용자 고민
-    user_concern = "회사 상사에게 받는 스트레스를 어떻게 해결해야 할까요?"
+    # 임시 사용자 질문
+    user_concern = "제가 뭘 좋아하고 잘하는 건지 모르겠습니다. 두 분은 어떻게 자신의 장점을 발견하셨나요?"
     dialogue_system.generate_dialogue(user_concern)
 
 
