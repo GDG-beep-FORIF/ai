@@ -5,6 +5,8 @@ from typing import Dict, List, Tuple
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from rich.console import Console
+from rich.markdown import Markdown
 
 load_dotenv()
 
@@ -92,7 +94,8 @@ class DialogueSystem:
 2. 대화는 자연스럽게 이어져야 하며, 각자의 시대적 배경과 가치관이 반영되어야 합니다.
 3. 페르소나의 성격 특성과 말투를 반영하여 대화를 생성하세요.
 4. 역사적 맥락과 개인적 경험을 연결지어 조언하도록 합니다.
-5. 서로의 의견에 대해 건설적으로 토론하고 보완하는 방식으로 대화를 진행하세요."""
+5. 서로의 의견에 대해 건설적으로 토론하고 보완하는 방식으로 대화를 진행하세요.
+6. 반드시 두 사람의 의견을 하나로 절충하여 사용자의 고민에 대한 최종 조언을 정해야 합니다."""
 
         dialogue_messages = [{"role": "system", "content": system_prompt}]
 
@@ -140,7 +143,7 @@ class DialogueSystem:
 - 사용자에게 도움이 될 만한 주요 조언들
 
 ## 결론
-간단한 결론 정리"""
+사용자의 고민이나 질문에 대한 최종 조언 요약"""
 
         summary_response = client.chat.completions.create(
             model="gpt-4o",
@@ -161,7 +164,7 @@ def format_dialogue(dialogue: List[Dict]) -> str:
     """
     formatted = "# 페르소나 간 대화\n\n"
     for turn in dialogue:
-        formatted += f"### {turn['speaker']}\n{turn['content']}\n\n"
+        formatted += f"## {turn['speaker']}\n{turn['content']}\n\n"
     return formatted
 
 
@@ -270,11 +273,14 @@ def main():
 
     dialogue_system = DialogueSystem(persona1, persona2)
 
-    user_concern = "직장에서의 스트레스 해소 방법에 대해 고민이 있습니다."
+    user_concern = "회사 상사에게 받는 스트레스를 어떻게 해결해야 할까요?"
     dialogue, summary = dialogue_system.generate_dialogue(user_concern)
 
-    print(format_dialogue(dialogue))
-    print(summary)
+    # print(format_dialogue(dialogue))
+    # print(summary)
+    console = Console()
+    console.print(Markdown(format_dialogue(dialogue)))
+    console.print(Markdown(summary))
 
 
 if __name__ == "__main__":
