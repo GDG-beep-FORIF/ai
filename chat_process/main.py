@@ -294,6 +294,7 @@ def main():
 
     dialogue_system = DialogueSystem(persona1, persona2)
 
+    # 임시 사용자 고민
     user_concern = "회사 상사에게 받는 스트레스를 어떻게 해결해야 할까요?"
     dialogue_system.generate_dialogue(user_concern)
 
