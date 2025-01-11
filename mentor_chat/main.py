@@ -1,5 +1,5 @@
-from fastapi import FastAPI, HTTPException, Depends
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, validator
 from typing import List, Optional, Dict
 from datetime import datetime
 import psycopg2
@@ -12,7 +12,8 @@ import httpx
 import json
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-
+from wiki import WikipediaPersonSearch
+from gpt_generator import generate_persona
 load_dotenv()
 
 app = FastAPI()
@@ -37,7 +38,12 @@ DATABASE_CONFIG = {
     "host": "aws-0-ap-northeast-2.pooler.supabase.com",
     "port": "6543"
 }
+def get_db_connection():
+    return psycopg2.connect(**DATABASE_CONFIG)
 
+# Pydantic models for request/response
+class PersonaRequest(BaseModel):
+    name: str
 # Pydantic models
 class MessageCreate(BaseModel):
     content: str
@@ -45,6 +51,14 @@ class MessageCreate(BaseModel):
 class ChatRoomCreate(BaseModel):
     title: str
     person_ids: List[uuid.UUID]
+    user_id: uuid.UUID
+
+    @validator('person_ids')
+    def validate_person_ids(cls, v):
+        if len(v) < 1 or len(v) > 2:
+            raise ValueError('채팅방에는 1-2명의 페르소나만 참여할 수 있습니다')
+        return v
+
 
 class Message(BaseModel):
     message_id: uuid.UUID
@@ -56,11 +70,6 @@ class Message(BaseModel):
         from_attributes = True
 
 # Helper functions
-async def get_current_user():
-    # JWT 토큰 검증 로직 구현
-    # 임시로 테스트용 사용자 ID 반환
-    return uuid.UUID("bc430308-def0-4203-9971-437fdba5283a")
-
 @contextmanager
 def get_db_cursor():
     conn = psycopg2.connect(**DATABASE_CONFIG)
@@ -74,6 +83,127 @@ def get_db_cursor():
         raise e
     finally:
         conn.close()
+
+async def insert_persona_data(persona_data: Dict, wiki_data: Dict) -> str:
+    person_id = str(uuid.uuid4())
+    
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            try:
+                # Begin transaction
+                cur.execute("BEGIN")
+                
+                # 1. Insert basic info
+                cur.execute("""
+                    INSERT INTO basic_info (person_id, name, birth_death, era, nationality, gender, image_url)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    person_id,
+                    persona_data["basic_info"]["name"],
+                    persona_data["basic_info"]["birth_death"],
+                    persona_data["basic_info"]["era"],
+                    persona_data["basic_info"]["nationality"],
+                    persona_data["basic_info"]["gender"],
+                    wiki_data.get("basic_info", {}).get("image_url")
+                ))
+
+                # 2. Insert professional info
+                cur.execute("""
+                    INSERT INTO professional_info (person_id, primary_occupation)
+                    VALUES (%s, %s)
+                """, (person_id, persona_data["professional"]["primary_occupation"]))
+
+                # 3. Insert other roles
+                for role in persona_data["professional"]["other_roles"]:
+                    cur.execute("""
+                        INSERT INTO other_roles (person_id, role_name)
+                        VALUES (%s, %s)
+                    """, (person_id, role))
+
+                # 4. Insert major achievements
+                for achievement in persona_data["professional"]["major_achievements"]:
+                    cur.execute("""
+                        INSERT INTO major_achievements (person_id, achievement_name)
+                        VALUES (%s, %s)
+                    """, (person_id, achievement))
+
+                # 5. Insert personal info
+                cur.execute("""
+                    INSERT INTO personal_info (person_id, education, background)
+                    VALUES (%s, %s, %s)
+                """, (
+                    person_id,
+                    persona_data["personal"]["education"],
+                    persona_data["personal"]["background"]
+                ))
+
+                # 6. Insert personality traits
+                for trait in persona_data["personal"]["personality_traits"]:
+                    cur.execute("""
+                        INSERT INTO personality_traits (person_id, trait_name)
+                        VALUES (%s, %s)
+                    """, (person_id, trait))
+
+                # 7. Insert influences
+                for influence in persona_data["personal"]["influences"]:
+                    cur.execute("""
+                        INSERT INTO influences (person_id, influence_name)
+                        VALUES (%s, %s)
+                    """, (person_id, influence))
+
+                # 8. Insert legacy
+                cur.execute("""
+                    INSERT INTO legacy (person_id, impact, modern_significance)
+                    VALUES (%s, %s, %s)
+                """, (
+                    person_id,
+                    persona_data["legacy"]["impact"],
+                    persona_data["legacy"]["modern_significance"]
+                ))
+
+                # 9. Insert historical context
+                cur.execute("""
+                    INSERT INTO historical_context (person_id, period_background)
+                    VALUES (%s, %s)
+                """, (
+                    person_id,
+                    persona_data["historical_context"]["period_background"]
+                ))
+
+                # 10. Insert key events
+                for event in persona_data["historical_context"]["key_events"]:
+                    cur.execute("""
+                        INSERT INTO key_events (person_id, event_description)
+                        VALUES (%s, %s)
+                    """, (person_id, event))
+
+                # Commit transaction
+                conn.commit()
+                return person_id
+
+            except Exception as e:
+                conn.rollback()
+                raise e
+
+@app.post("/persona_generator")
+async def create_persona(request: PersonaRequest):
+    try:
+        # 1. Wikipedia에서 데이터 가져오기
+        wiki_search = WikipediaPersonSearch()
+        wiki_data = wiki_search.search_person(request.name, summary_only=False)
+        
+        if not wiki_data:
+            raise HTTPException(status_code=404, detail="Person not found in Wikipedia")
+
+        # 2. GPT를 통해 persona 생성
+        persona_data = await generate_persona(wiki_data)
+        print(persona_data)
+        # 3. DB에 데이터 저장
+        person_id = await insert_persona_data(persona_data, wiki_data)
+        return {"status": "success", "person_id": person_id}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 async def fetch_persona_info(name: str) -> Dict:
     """외부 API에서 페르소나 정보 조회"""
@@ -190,18 +320,26 @@ async def read_root():
     return {"status": "running", "message": "Chat API is running"}
 
 @app.post("/chat-rooms/")
-async def create_chat_room(
-    chat_room: ChatRoomCreate,
-    current_user_id: uuid.UUID = Depends(get_current_user)
-):
+async def create_chat_room(chat_room: ChatRoomCreate):
     with get_db_cursor() as cur:
         try:
+            # 페르소나 존재 여부 확인
+            for person_id in chat_room.person_ids:
+                cur.execute("""
+                    SELECT 1 FROM basic_info WHERE person_id = %s
+                """, (person_id,))
+                if not cur.fetchone():
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"페르소나를 찾을 수 없습니다: {person_id}"
+                    )
+            
             # 채팅방 생성
             cur.execute("""
                 INSERT INTO chat_rooms (user_id, title, status)
                 VALUES (%s, %s, 'ACTIVE')
                 RETURNING room_id
-            """, (current_user_id, chat_room.title))
+            """, (chat_room.user_id, chat_room.title))
             
             room_id = cur.fetchone()['room_id']
             
@@ -212,12 +350,18 @@ async def create_chat_room(
                     VALUES (%s, %s)
                 """, (room_id, person_id))
                 
-            return {"room_id": room_id, "status": "created"}
+            return {
+                "room_id": room_id, 
+                "status": "created",
+                "person_count": len(chat_room.person_ids)
+            }
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"채팅방 생성 중 오류 발생: {str(e)}")
-
+        
 @app.get("/chat-rooms/")
-async def list_chat_rooms(current_user_id: uuid.UUID = Depends(get_current_user)):
+async def list_chat_rooms(user_id: uuid.UUID):
     with get_db_cursor() as cur:
         cur.execute("""
             SELECT r.room_id, r.title, r.status, r.created_at,
@@ -228,14 +372,14 @@ async def list_chat_rooms(current_user_id: uuid.UUID = Depends(get_current_user)
             WHERE r.user_id = %s
             GROUP BY r.room_id, r.title, r.status, r.created_at
             ORDER BY r.created_at DESC
-        """, (current_user_id,))
+        """, (user_id,))
         
         return cur.fetchall()
 
 @app.get("/chat-rooms/{room_id}")
 async def get_chat_room(
     room_id: uuid.UUID,
-    current_user_id: uuid.UUID = Depends(get_current_user)
+    user_id: uuid.UUID
 ):
     with get_db_cursor() as cur:
         cur.execute("""
@@ -249,7 +393,7 @@ async def get_chat_room(
             LEFT JOIN basic_info p ON crp.person_id = p.person_id
             WHERE r.room_id = %s AND r.user_id = %s
             GROUP BY r.room_id
-        """, (room_id, current_user_id))
+        """, (room_id, user_id))
         
         result = cur.fetchone()
         if not result:
@@ -260,14 +404,14 @@ async def get_chat_room(
 @app.get("/chat-rooms/{room_id}/messages/")
 async def get_chat_messages(
     room_id: uuid.UUID,
-    current_user_id: uuid.UUID = Depends(get_current_user)
+    user_id: uuid.UUID
 ):
     with get_db_cursor() as cur:
         # 채팅방 접근 권한 확인
         cur.execute("""
             SELECT 1 FROM chat_rooms 
             WHERE room_id = %s AND user_id = %s
-        """, (room_id, current_user_id))
+        """, (room_id, user_id))
         
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="채팅방을 찾을 수 없습니다.")
@@ -286,7 +430,7 @@ async def get_chat_messages(
 async def create_message(
     room_id: uuid.UUID,
     message: MessageCreate,
-    current_user_id: uuid.UUID = Depends(get_current_user)
+    user_id: uuid.UUID
 ):
     with get_db_cursor() as cur:
         try:
@@ -295,7 +439,7 @@ async def create_message(
                 INSERT INTO chat_messages (room_id, sender_type, sender_id, content)
                 VALUES (%s, 'USER', %s, %s)
                 RETURNING message_id, created_at
-            """, (room_id, current_user_id, message.content))
+            """, (room_id, user_id, message.content))
             
             user_message = cur.fetchone()
             
@@ -331,7 +475,7 @@ async def create_message(
                 INSERT INTO chat_messages (room_id, sender_type, sender_id, content)
                 VALUES (%s, 'AI', %s, %s)
                 RETURNING message_id, created_at
-            """, (room_id, current_user_id, ai_response))
+            """, (room_id, user_id, ai_response))
             
             return {
                 "message_id": user_message['message_id'],
