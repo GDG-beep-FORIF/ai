@@ -197,12 +197,13 @@ async def create_message(
         # AI 응답들 저장
         for turn in dialogue:
             sender_id = await fetch_persona_id_by_name(turn["speaker"])
+            sender_type = "AI1" if turn["speaker"] == persona1_data["name"] else "AI2"
             cur.execute(
                 """
                 INSERT INTO chat_messages (room_id, sender_type, sender_id, content)
-                VALUES (%s, 'AI', %s, %s)
+                VALUES (%s, %s, %s, %s)
                 """,
-                (room_id, sender_id, turn["content"]),
+                (room_id, sender_type, sender_id, turn["content"]),
             )
 
         conn.commit()
