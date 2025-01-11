@@ -32,7 +32,7 @@ DATABASE_CONFIG = {
     "user": "postgres.baeuipvrxxdsidfkwmvn",
     "password": "4CipIRLuLkYavf3X",
     "host": "aws-0-ap-northeast-2.pooler.supabase.com",
-    "port": "6543"
+    "port": "6543",
 }
 
 
@@ -43,11 +43,13 @@ class DialogueSystem:
         persona2_data: Dict,
         connection_manager=None,
         room_id=None,
+        user_id=None,
     ):
         self.persona1_data = persona1_data
         self.persona2_data = persona2_data
         self.connection_manager = connection_manager
         self.room_id = room_id
+        self.user_id = user_id
 
     async def send_dialogue_message(self, message: dict):
         """웹소켓을 통해 대화 메시지 전송"""
@@ -155,6 +157,22 @@ class DialogueSystem:
             if self.connection_manager and self.room_id:
                 await self.send_dialogue_message(dialogue_turn)
 
+            conn = get_db_connection()
+            try:
+                await save_and_broadcast_message(
+                    conn,
+                    self.room_id,
+                    "AI",
+                    self.user_id,
+                    content,
+                )
+                conn.commit()
+            except Exception as e:
+                print(f"Failed to save AI message: {str(e)}")
+                conn.rollback()
+            finally:
+                conn.close()
+
             dialogue_messages.append({"role": "assistant", "content": content})
             current_persona, other_persona = other_persona, current_persona
 
@@ -247,7 +265,7 @@ async def fetch_persona_data(person_id: uuid.UUID) -> Dict:
             response = await client.get(f"{PERSONA_API_BASE}/persons/{person_id}")
             response.raise_for_status()
             data = response.json()
-            
+
             # API 응답을 DialogueSystem이 기대하는 형식으로 변환
             return {
                 "basic_info": {
@@ -259,7 +277,11 @@ async def fetch_persona_data(person_id: uuid.UUID) -> Dict:
                     "gender": data["gender"],
                 },
                 "professional": {
-                    "primary_occupation": data["professionalInfo"][0]["primaryOccupation"] if data["professionalInfo"] else "",
+                    "primary_occupation": (
+                        data["professionalInfo"][0]["primaryOccupation"]
+                        if data["professionalInfo"]
+                        else ""
+                    ),
                     "other_roles": data["otherRoles"],
                     "major_achievements": data["achievements"],
                 },
@@ -273,12 +295,15 @@ async def fetch_persona_data(person_id: uuid.UUID) -> Dict:
                 "historical_context": {
                     "period_background": data["historicalContext"]["periodBackground"],
                     "key_events": data["keyEvents"],
-                }
+                },
             }
-            
+
         except httpx.HTTPError as e:
             print(f"HTTP Error: {e}")
-            raise HTTPException(status_code=500, detail=f"페르소나 정보를 가져오는데 실패했습니다: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"페르소나 정보를 가져오는데 실패했습니다: {str(e)}",
+            )
         except Exception as e:
             print(f"Unexpected error: {e}")
             raise HTTPException(status_code=500, detail="서버 내부 오류가 발생했습니다")
@@ -308,11 +333,11 @@ async def websocket_endpoint(websocket: WebSocket, room_id: uuid.UUID):
         while True:
             # 클라이언트로부터 메시지 수신
             data = await websocket.receive_json()  # JSON 형태로 메시지 수신
-            
+
             # 필요한 데이터 추출
             content = data.get("content")
             user_id = uuid.UUID(data.get("user_id"))
-            
+
             conn = get_db_connection()
             try:
                 # 사용자 메시지 저장 및 브로드캐스트
@@ -328,7 +353,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: uuid.UUID):
                     JOIN basic_info p ON crp.person_id = p.person_id
                     WHERE crp.room_id = %s
                     """,
-                    (room_id,)
+                    (room_id,),
                 )
                 personas = cur.fetchall()
                 print("personas cur")
@@ -344,6 +369,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: uuid.UUID):
                     persona2_data,
                     connection_manager=manager,
                     room_id=room_id,
+                    user_id=user_id,
                 )
 
                 # 대화 생성 - websocket을 통해 자동으로 브로드캐스트됨
@@ -351,24 +377,24 @@ async def websocket_endpoint(websocket: WebSocket, room_id: uuid.UUID):
                     content, num_turns=3
                 )
 
+                # 요약 메시지 저장
+                await save_and_broadcast_message(conn, room_id, "AI", user_id, summary)
+
                 # 요약 메시지 전송
                 await manager.broadcast_to_room(
                     {
                         "type": "summary",
                         "content": summary,
-                        "timestamp": datetime.now().isoformat()
+                        "timestamp": datetime.now().isoformat(),
                     },
-                    room_id
+                    room_id,
                 )
 
                 conn.commit()
 
             except Exception as e:
                 conn.rollback()
-                await websocket.send_json({
-                    "type": "error",
-                    "message": str(e)
-                })
+                await websocket.send_json({"type": "error", "message": str(e)})
             finally:
                 conn.close()
 
