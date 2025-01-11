@@ -40,38 +40,42 @@ class Persona:
         other_roles = ", ".join(
             role["roleName"] for role in self.professional.get("other_roles", [])
         )
+        influences = "\n        - ".join(
+            influence["influenceName"]
+            for influence in self.personal.get("influences", [])
+        )
 
         return f"""
-        === 페르소나 프로필 ===
-        
-        1. 기본 정보
-        - 이름: {self.basic_info.get('name')}
-        - 시대: {self.basic_info.get('era')}
-        - 생몰년: {self.basic_info.get('birth_death')}
-        - 국적: {self.basic_info.get('nationality')}
-        - 성별: {self.basic_info.get('gender')}
+    === 페르소나 상세 프로필 ===
 
-        2. 전문적 경력
-        - 주요 직업: {self.professional.get('primary_occupation')}
-        - 기타 역할: {other_roles}
-        - 주요 업적:
-        - {achievements}
-        
-        3. 개인적 배경
-        - 교육: {self.personal.get('education')}
-        - 배경: {self.personal.get('background')}
-        - 성격 특성:
-        - {personality}
-        
-        4. 영향력과 유산
-        - 역사적 영향: {self.legacy.get('impact')}
-        - 현대적 의의: {self.legacy.get('modern_significance')}
-        
-        5. 시대적 배경
-        - 시대 상황: {self.historical_context.get('period_background')}
-        - 주요 사건:
-        - {key_events}
-        """
+    1. 인물 정보
+    - 이름: {self.basic_info.get('name', '')}
+    - 생애: {self.basic_info.get('birth_death', '')}
+    - 시대: {self.basic_info.get('era', '')}
+    - 국적: {self.basic_info.get('nationality', '')}
+
+    2. 직업과 업적
+    - 주요 직책: {self.professional.get('primary_occupation', '')}
+    - 관련 역할: {other_roles}
+    - 주요 업적:
+            - {achievements}
+
+    3. 개인 배경과 성향
+    - 교육 배경: {self.personal.get('education', '')}
+    - 개인 이력: {self.personal.get('background', '')}
+    - 성격 특성:
+            - {personality}
+    - 영향 받은 요소:
+            - {influences}
+
+    4. 역사적 맥락
+    - 시대적 배경: {self.historical_context.get('period_background', '')}
+    - 주요 사건:
+            - {key_events}
+
+    5. 역사적 의의
+    - 역사적 영향: {self.legacy.get('impact', '')}
+    - 현대적 의미: {self.legacy.get('modern_significance', '')}"""
 
 
 class DialogueSystem:
