@@ -121,9 +121,14 @@ class DialogueSystem:
                 messages=dialogue_messages + [{"role": "user", "content": prompt}],
             )
 
+            # GPT 응답에서 화자 이름 제거
+            content = response.choices[0].message.content
+            speaker_name = current_persona.basic_info.get("name")
+            content = content.replace(f"{speaker_name}: ", "")
+
             dialogue_turn = {
-                "speaker": current_persona.basic_info.get("name"),
-                "content": response.choices[0].message.content,
+                "speaker": speaker_name,
+                "content": content,
             }
             dialogue.append(dialogue_turn)
 
@@ -131,12 +136,10 @@ class DialogueSystem:
             self.console.print(
                 Markdown(f"\n## {dialogue_turn['speaker']}"), style="bold blue"
             )
-            self.console.print(Markdown(dialogue_turn["content"]))
+            self.console.print(Markdown(content))
             self.console.print(Markdown("\n"))
 
-            dialogue_messages.append(
-                {"role": "assistant", "content": response.choices[0].message.content}
-            )
+            dialogue_messages.append({"role": "assistant", "content": content})
 
             # 다음 턴을 위해 페르소나 교체
             current_persona, other_persona = other_persona, current_persona
