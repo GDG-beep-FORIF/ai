@@ -475,7 +475,7 @@ async def create_message(
                 INSERT INTO chat_messages (room_id, sender_type, sender_id, content)
                 VALUES (%s, 'AI', %s, %s)
                 RETURNING message_id, created_at
-            """, (room_id, user_id, ai_response))
+            """, (room_id, person_info['person_id'], ai_response))
             
             return {
                 "message_id": user_message['message_id'],
@@ -484,7 +484,8 @@ async def create_message(
                 "created_at": user_message['created_at'],
                 "ai_response": {
                     "content": ai_response,
-                    "sender_type": "AI"
+                    "sender_type": "AI",
+                    "sender_id": person_info['person_id']
                 }
             }
         except Exception as e:
