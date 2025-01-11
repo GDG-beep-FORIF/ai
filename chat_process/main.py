@@ -71,6 +71,7 @@ class DialogueSystem:
         """
         self.persona1 = persona1
         self.persona2 = persona2
+        self.console = Console()  # 임시 마크다운 출력용
 
     def generate_dialogue(
         self, user_concern: str, num_turns: int = 3
@@ -103,6 +104,10 @@ class DialogueSystem:
         current_persona = self.persona1  # 첫 번째 페르소나부터 시작
         other_persona = self.persona2
 
+        self.console.print(
+            Markdown("\n# 대화 시작\n"), style="bold green"
+        )  # 임시 마크다운 출력용
+
         for turn in range(num_turns * 2):
             prompt = f"""현재 말하는 페르소나는 {current_persona.basic_info.get('name')}입니다.
 상대 페르소나는 {other_persona.basic_info.get('name')}입니다.
@@ -122,12 +127,23 @@ class DialogueSystem:
             }
             dialogue.append(dialogue_turn)
 
+            # 임시 마크다운 출력용
+            self.console.print(
+                Markdown(f"\n## {dialogue_turn['speaker']}"), style="bold blue"
+            )
+            self.console.print(Markdown(dialogue_turn["content"]))
+            self.console.print(Markdown("\n"))
+
             dialogue_messages.append(
                 {"role": "assistant", "content": response.choices[0].message.content}
             )
 
             # 다음 턴을 위해 페르소나 교체
             current_persona, other_persona = other_persona, current_persona
+
+        self.console.print(
+            Markdown("\n# 대화 종료\n\n"), style="bold red"
+        )  # 임시 마크다운 출력용
 
         summary_prompt = """지금까지의 대화를 다음 형식으로 마크다운 요약을 작성해주세요:
 
@@ -154,6 +170,8 @@ class DialogueSystem:
         )
 
         summary = summary_response.choices[0].message.content
+
+        self.console.print(Markdown(summary))  # 임시 마크다운 출력용
 
         return dialogue, summary
 
@@ -274,13 +292,7 @@ def main():
     dialogue_system = DialogueSystem(persona1, persona2)
 
     user_concern = "회사 상사에게 받는 스트레스를 어떻게 해결해야 할까요?"
-    dialogue, summary = dialogue_system.generate_dialogue(user_concern)
-
-    # print(format_dialogue(dialogue))
-    # print(summary)
-    console = Console()
-    console.print(Markdown(format_dialogue(dialogue)))
-    console.print(Markdown(summary))
+    dialogue_system.generate_dialogue(user_concern)
 
 
 if __name__ == "__main__":
