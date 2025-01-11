@@ -27,10 +27,19 @@ class Persona:
     def get_prompt_context(self) -> str:
         """페르소나의 전체적인 컨텍스트 정보 생성"""
         achievements = "\n        - ".join(
-            self.professional.get("major_achievements", [])
+            achievement["achievementName"]
+            for achievement in self.professional.get("major_achievements", [])
         )
-        personality = "\n        - ".join(self.personal.get("personality_traits", []))
-        key_events = "\n        - ".join(self.historical_context.get("key_events", []))
+        personality = "\n        - ".join(
+            trait["traitName"] for trait in self.personal.get("personality_traits", [])
+        )
+        key_events = "\n        - ".join(
+            event["eventDescription"]
+            for event in self.historical_context.get("key_events", [])
+        )
+        other_roles = ", ".join(
+            role["roleName"] for role in self.professional.get("other_roles", [])
+        )
 
         return f"""
         === 페르소나 프로필 ===
@@ -44,6 +53,7 @@ class Persona:
 
         2. 전문적 경력
         - 주요 직업: {self.professional.get('primary_occupation')}
+        - 기타 역할: {other_roles}
         - 주요 업적:
         - {achievements}
         
@@ -191,102 +201,143 @@ def format_dialogue(dialogue: List[Dict]) -> str:
 
 def main():
     persona1_data = {
-        "basic_info": {
-            "name": "이순신",
-            "birth_death": "1545-1598",
-            "era": "조선 중기",
-            "nationality": "조선",
-            "gender": "남성",
-        },
-        "professional": {
-            "primary_occupation": "조선 수군 지휘관, 장군",
-            "other_roles": ["병법가", "전략가"],
-            "major_achievements": [
-                "임진왜란 당시 조선 수군을 이끌어 다수의 승리 획득",
-                "한산도 대첩, 명량 대첩 등에서 결정적 승리를 이끌어냄",
-                "거북선을 개발 및 활용",
-                "조선 해군의 명성을 드높이며 조국을 지켜냄",
-            ],
-        },
-        "personal": {
-            "education": "성균관에서 유학 수학",
-            "background": "어려운 가정 형편 속에서도 학문과 무예에 매진하여 무과 급제",
-            "personality_traits": [
-                "책임감 강하고 불굴의 의지를 가짐",
-                "타인을 배려하며 군사들과 신뢰를 쌓음",
-                "침착하고 냉철한 판단력",
-                "조국과 백성을 위한 희생정신",
-            ],
-            "influences": [
-                "유학의 충효 사상",
-                "병법과 전략에 대한 깊은 관심",
-                "임진왜란 당시 조국의 위기",
-                "군사들과 백성들의 신뢰와 지지",
-            ],
-        },
-        "legacy": {
-            "impact": "조선의 해상 방어를 강화하고, 침략에 맞서 조국을 구한 영웅",
-            "modern_significance": "한국에서 국가적 영웅으로 존경받으며, 리더십과 애국심의 상징",
-        },
-        "historical_context": {
-            "period_background": "임진왜란으로 인한 조선의 위기 상황과 왜군의 대규모 침략",
-            "key_events": [
-                "임진왜란 발발 (1592년)",
-                "옥포 해전, 한산도 대첩 승리",
-                "왜군의 남해 해상 봉쇄 성공",
-                "명량 해전에서 열세를 극복하고 대승",
-                "노량 해전에서 전사",
-            ],
-        },
+        {
+            "basic_info": {
+                "id": "",
+                "name": "이순신",
+                "birth_death": "1545-1598",
+                "era": "조선 중기",
+                "nationality": "조선",
+                "gender": "남성",
+            },
+            "professional": {
+                "id": "",
+                "primary_occupation": "조선 수군 지휘관, 장군",
+                "other_roles": [
+                    {"id": "", "roleName": "병법가"},
+                    {"id": "", "roleName": "전략가"},
+                ],
+                "major_achievements": [
+                    {
+                        "id": "",
+                        "achievementName": "임진왜란 당시 조선 수군을 이끌어 다수의 승리 획득",
+                    },
+                    {
+                        "id": "",
+                        "achievementName": "한산도 대첩, 명량 대첩 등에서 결정적 승리를 이끌어냄",
+                    },
+                    {"id": "", "achievementName": "거북선을 개발 및 활용"},
+                    {
+                        "id": "",
+                        "achievementName": "조선 해군의 명성을 드높이며 조국을 지켜냄",
+                    },
+                ],
+            },
+            "personal": {
+                "id": "",
+                "education": "성균관에서 유학 수학",
+                "background": "어려운 가정 형편 속에서도 학문과 무예에 매진하여 무과 급제",
+                "personality_traits": [
+                    {"id": "", "traitName": "책임감 강하고 불굴의 의지를 가짐"},
+                    {"id": "", "traitName": "타인을 배려하며 군사들과 신뢰를 쌓음"},
+                    {"id": "", "traitName": "침착하고 냉철한 판단력"},
+                    {"id": "", "traitName": "조국과 백성을 위한 희생정신"},
+                ],
+                "influences": [
+                    {"id": "", "influenceName": "유학의 충효 사상"},
+                    {"id": "", "influenceName": "병법과 전략에 대한 깊은 관심"},
+                    {"id": "", "influenceName": "임진왜란 당시 조국의 위기"},
+                    {"id": "", "influenceName": "군사들과 백성들의 신뢰와 지지"},
+                ],
+            },
+            "legacy": {
+                "id": "",
+                "impact": "조선의 해상 방어를 강화하고, 침략에 맞서 조국을 구한 영웅",
+                "modern_significance": "한국에서 국가적 영웅으로 존경받으며, 리더십과 애국심의 상징",
+            },
+            "historical_context": {
+                "id": "",
+                "period_background": "임진왜란으로 인한 조선의 위기 상황과 왜군의 대규모 침략",
+                "key_events": [
+                    {"id": "", "eventDescription": "임진왜란 발발 (1592년)"},
+                    {"id": "", "eventDescription": "옥포 해전, 한산도 대첩 승리"},
+                    {"id": "", "eventDescription": "왜군의 남해 해상 봉쇄 성공"},
+                    {
+                        "id": "",
+                        "eventDescription": "명량 해전에서 열세를 극복하고 대승",
+                    },
+                    {"id": "", "eventDescription": "노량 해전에서 전사"},
+                ],
+            },
+        }
     }
 
     persona2_data = {
-        "basic_info": {
-            "name": "고죠 사토루",
-            "birth_death": "1989-현재",
-            "era": "현대",
-            "nationality": "일본",
-            "gender": "남성",
-        },
-        "professional": {
-            "primary_occupation": "주술사, 교사",
-            "other_roles": ["스승", "강사"],
-            "major_achievements": [
-                "무한을 다루는 주술사",
-                "사상 최강의 주술사로 인정받음",
-                "특급 주령 다수 봉인 및 제압",
-                "도쿄 주술고등전문학교 교사로 활동하며 뛰어난 제자를 양성",
-            ],
-        },
-        "personal": {
-            "education": "도쿄 주술고등전문학교 졸업",
-            "background": "천부적인 재능을 타고난 주술사로, 고죠 가문의 계승자",
-            "personality_traits": [
-                "자신감 넘치는 태도",
-                "냉철하면서도 유머러스한 성격",
-                "정의감이 강하고 동료를 소중히 여김",
-                "위험에도 두려움 없이 행동",
-            ],
-            "influences": [
-                "고죠 가문의 전통과 유산",
-                "무한의 주술 기술",
-                "주술 세계의 갈등과 불의",
-                "제자들과 동료들에 대한 책임감",
-            ],
-        },
-        "legacy": {
-            "impact": "주술 세계의 균형을 유지하며 강력한 힘으로 악을 억제함",
-            "modern_significance": "미래 주술사들에게 큰 영향을 끼치며, 정의와 강함의 상징이 됨",
-        },
-        "historical_context": {
-            "period_background": "주령과의 싸움이 지속되는 현대 일본",
-            "key_events": [
-                "수많은 특급 주령과의 전투",
-                "교토와 도쿄 주술사들의 대립 완화에 기여",
-                "숙명의 적과의 대립",
-                "특급 주령 '스쿠나'와 관련된 사건에 깊게 관여",
-            ],
-        },
+        {
+            "basic_info": {
+                "id": "",
+                "name": "고죠 사토루",
+                "birth_death": "1989-현재",
+                "era": "현대",
+                "nationality": "일본",
+                "gender": "남성",
+            },
+            "professional": {
+                "id": "",
+                "primary_occupation": "주술사, 교사",
+                "other_roles": [
+                    {"id": "", "roleName": "스승"},
+                    {"id": "", "roleName": "강사"},
+                ],
+                "major_achievements": [
+                    {"id": "", "achievementName": "무한을 다루는 주술사"},
+                    {"id": "", "achievementName": "사상 최강의 주술사로 인정받음"},
+                    {"id": "", "achievementName": "특급 주령 다수 봉인 및 제압"},
+                    {
+                        "id": "",
+                        "achievementName": "도쿄 주술고등전문학교 교사로 활동하며 뛰어난 제자를 양성",
+                    },
+                ],
+            },
+            "personal": {
+                "id": "",
+                "education": "도쿄 주술고등전문학교 졸업",
+                "background": "천부적인 재능을 타고난 주술사로, 고죠 가문의 계승자",
+                "personality_traits": [
+                    {"id": "", "traitName": "자신감 넘치는 태도"},
+                    {"id": "", "traitName": "냉철하면서도 유머러스한 성격"},
+                    {"id": "", "traitName": "정의감이 강하고 동료를 소중히 여김"},
+                    {"id": "", "traitName": "위험에도 두려움 없이 행동"},
+                ],
+                "influences": [
+                    {"id": "", "influenceName": "고죠 가문의 전통과 유산"},
+                    {"id": "", "influenceName": "무한의 주술 기술"},
+                    {"id": "", "influenceName": "주술 세계의 갈등과 불의"},
+                    {"id": "", "influenceName": "제자들과 동료들에 대한 책임감"},
+                ],
+            },
+            "legacy": {
+                "id": "",
+                "impact": "주술 세계의 균형을 유지하며 강력한 힘으로 악을 억제함",
+                "modern_significance": "미래 주술사들에게 큰 영향을 끼치며, 정의와 강함의 상징이 됨",
+            },
+            "historical_context": {
+                "id": "",
+                "period_background": "주령과의 싸움이 지속되는 현대 일본",
+                "key_events": [
+                    {"id": "", "eventDescription": "수많은 특급 주령과의 전투"},
+                    {
+                        "id": "",
+                        "eventDescription": "교토와 도쿄 주술사들의 대립 완화에 기여",
+                    },
+                    {"id": "", "eventDescription": "숙명의 적과의 대립"},
+                    {
+                        "id": "",
+                        "eventDescription": "특급 주령 '스쿠나'와 관련된 사건에 깊게 관여",
+                    },
+                ],
+            },
+        }
     }
 
     # 페르소나 인스턴스 생성
