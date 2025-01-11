@@ -1,3 +1,7 @@
 .venv
 .env
 .DS_Store
+poetry.lock
+pyproject.toml
+__pycache__/
+.gitignore
