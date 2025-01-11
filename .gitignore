@@ -1,6 +1,7 @@
 .venv
 .env
 .DS_Store
+__pycache__
 poetry.lock
 pyproject.toml
 __pycache__/

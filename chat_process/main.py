@@ -27,41 +27,55 @@ class Persona:
     def get_prompt_context(self) -> str:
         """페르소나의 전체적인 컨텍스트 정보 생성"""
         achievements = "\n        - ".join(
-            self.professional.get("major_achievements", [])
+            achievement["achievementName"]
+            for achievement in self.professional.get("major_achievements", [])
         )
-        personality = "\n        - ".join(self.personal.get("personality_traits", []))
-        key_events = "\n        - ".join(self.historical_context.get("key_events", []))
+        personality = "\n        - ".join(
+            trait["traitName"] for trait in self.personal.get("personality_traits", [])
+        )
+        key_events = "\n        - ".join(
+            event["eventDescription"]
+            for event in self.historical_context.get("key_events", [])
+        )
+        other_roles = ", ".join(
+            role["roleName"] for role in self.professional.get("other_roles", [])
+        )
+        influences = "\n        - ".join(
+            influence["influenceName"]
+            for influence in self.personal.get("influences", [])
+        )
 
         return f"""
-        === 페르소나 프로필 ===
-        
-        1. 기본 정보
-        - 이름: {self.basic_info.get('name')}
-        - 시대: {self.basic_info.get('era')}
-        - 생몰년: {self.basic_info.get('birth_death')}
-        - 국적: {self.basic_info.get('nationality')}
-        - 성별: {self.basic_info.get('gender')}
+    === 페르소나 상세 프로필 ===
 
-        2. 전문적 경력
-        - 주요 직업: {self.professional.get('primary_occupation')}
-        - 주요 업적:
-        - {achievements}
-        
-        3. 개인적 배경
-        - 교육: {self.personal.get('education')}
-        - 배경: {self.personal.get('background')}
-        - 성격 특성:
-        - {personality}
-        
-        4. 영향력과 유산
-        - 역사적 영향: {self.legacy.get('impact')}
-        - 현대적 의의: {self.legacy.get('modern_significance')}
-        
-        5. 시대적 배경
-        - 시대 상황: {self.historical_context.get('period_background')}
-        - 주요 사건:
-        - {key_events}
-        """
+    1. 인물 정보
+    - 이름: {self.basic_info.get('name', '')}
+    - 생애: {self.basic_info.get('birth_death', '')}
+    - 시대: {self.basic_info.get('era', '')}
+    - 국적: {self.basic_info.get('nationality', '')}
+
+    2. 직업과 업적
+    - 주요 직책: {self.professional.get('primary_occupation', '')}
+    - 관련 역할: {other_roles}
+    - 주요 업적:
+            - {achievements}
+
+    3. 개인 배경과 성향
+    - 교육 배경: {self.personal.get('education', '')}
+    - 개인 이력: {self.personal.get('background', '')}
+    - 성격 특성:
+            - {personality}
+    - 영향 받은 요소:
+            - {influences}
+
+    4. 역사적 맥락
+    - 시대적 배경: {self.historical_context.get('period_background', '')}
+    - 주요 사건:
+            - {key_events}
+
+    5. 역사적 의의
+    - 역사적 영향: {self.legacy.get('impact', '')}
+    - 현대적 의미: {self.legacy.get('modern_significance', '')}"""
 
 
 class DialogueSystem:
@@ -80,7 +94,7 @@ class DialogueSystem:
         페르소나 간 대화 생성 및 요약
         """
 
-        system_prompt = f"""당신은 두 역사적 인물 간의 대화를 생성해야 합니다.
+        system_prompt = f"""당신은 두 인물 간의 대화를 생성해야 합니다.
         
 첫 번째 페르소나:
 {self.persona1.get_prompt_context()}
@@ -88,15 +102,17 @@ class DialogueSystem:
 두 번째 페르소나:
 {self.persona2.get_prompt_context()}
 
-사용자의 고민: {user_concern}
+사용자의 질문: {user_concern}
 
 다음 지침을 따라 대화를 생성하세요:
-1. 각 페르소나는 자신의 경험과 관점에서 사용자의 고민에 대해 조언해야 합니다.
+1. 각 페르소나는 자신의 경험과 관점에서 사용자의 질문에 대해 답변해야 합니다.
 2. 대화는 자연스럽게 이어져야 하며, 각자의 시대적 배경과 가치관이 반영되어야 합니다.
 3. 페르소나의 성격 특성과 말투를 반영하여 대화를 생성하세요.
-4. 역사적 맥락과 개인적 경험을 연결지어 조언하도록 합니다.
+4. 역사적 맥락과 개인적 경험을 연결지어 답변하도록 합니다.
 5. 서로의 의견에 대해 건설적으로 토론하고 보완하는 방식으로 대화를 진행하세요.
-6. 최종적으로 두 사람의 관점을 종합하여 유익한 조언을 제공하세요."""
+6. 최종적으로 두 사람의 관점을 종합하여 유익한 조언을 제공하세요
+
+반드시 사용자의 고민에 대한 올바른 조언을 포함해야 합니다."""
 
         dialogue_messages = [{"role": "system", "content": system_prompt}]
 
@@ -113,6 +129,8 @@ class DialogueSystem:
 상대 페르소나는 {other_persona.basic_info.get('name')}입니다.
 
 이전 대화를 고려하여, {current_persona.basic_info.get('name')}의 관점에서 대화를 이어가세요.
+반드시 {current_persona.basic_info.get('name')}의 대화만 생성해야 합니다.
+
 페르소나의 시대적 배경, 경험, 성격을 반영한 자연스러운 대화를 생성해주세요.
 현재 턴이 {turn + 1}/{num_turns * 2}입니다. 마지막 턴에 가까워질수록 대화를 자연스럽게 마무리해주세요."""
 
@@ -125,6 +143,9 @@ class DialogueSystem:
             content = response.choices[0].message.content
             speaker_name = current_persona.basic_info.get("name")
             content = content.replace(f"{speaker_name}: ", "")
+
+            # GPT 응답에서 양 끝의 큰따옴표 제거
+            content = content.strip('"')
 
             dialogue_turn = {
                 "speaker": speaker_name,
@@ -162,7 +183,7 @@ class DialogueSystem:
 - 사용자에게 도움이 될 만한 주요 조언들
 
 ## 결론
-사용자의 고민이나 질문에 대한 최종 조언 요약"""
+사용자의 고민에 대한 최종 조언 요약"""
 
         summary_response = client.chat.completions.create(
             model="gpt-4o",
@@ -192,98 +213,136 @@ def format_dialogue(dialogue: List[Dict]) -> str:
 def main():
     persona1_data = {
         "basic_info": {
-            "name": "퇴계 이황",
-            "birth_death": "1501-1570",
+            "id": "",
+            "name": "이순신",
+            "birth_death": "1545-1598",
             "era": "조선 중기",
             "nationality": "조선",
             "gender": "남성",
         },
         "professional": {
-            "primary_occupation": "성리학자, 교육자",
-            "other_roles": ["정치인", "시인", "문인"],
+            "id": "",
+            "primary_occupation": "조선 수군 지휘관, 장군",
+            "other_roles": [
+                {"id": "", "roleName": "병법가"},
+                {"id": "", "roleName": "전략가"},
+            ],
             "major_achievements": [
-                "주자학의 심도 있는 연구와 발전",
-                "『성학십도』 저술",
-                "도산서원 설립",
-                "사단칠정론 확립",
+                {
+                    "id": "",
+                    "achievementName": "임진왜란 당시 조선 수군을 이끌어 다수의 승리 획득",
+                },
+                {
+                    "id": "",
+                    "achievementName": "한산도 대첩, 명량 대첩 등에서 결정적 승리를 이끌어냄",
+                },
+                {"id": "", "achievementName": "거북선을 개발 및 활용"},
+                {
+                    "id": "",
+                    "achievementName": "조선 해군의 명성을 드높이며 조국을 지켜냄",
+                },
             ],
         },
         "personal": {
-            "education": "성균관에서 수학",
-            "background": "어려서부터 학문에 전념하였으며, 29세에 과거에 급제",
+            "id": "",
+            "education": "성균관에서 유학 수학",
+            "background": "어려운 가정 형편 속에서도 학문과 무예에 매진하여 무과 급제",
             "personality_traits": [
-                "신중하고 사려깊은 성격",
-                "학문에 대한 진지한 태도",
-                "검소하고 겸손한 생활",
-                "자연과의 조화를 중시",
+                {"id": "", "traitName": "책임감 강하고 불굴의 의지를 가짐"},
+                {"id": "", "traitName": "타인을 배려하며 군사들과 신뢰를 쌓음"},
+                {"id": "", "traitName": "침착하고 냉철한 판단력"},
+                {"id": "", "traitName": "조국과 백성을 위한 희생정신"},
             ],
             "influences": [
-                "주자학",
-                "불교와 도교의 영향",
-                "자연과의 교감",
-                "시대적 혼란",
+                {"id": "", "influenceName": "유학의 충효 사상"},
+                {"id": "", "influenceName": "병법과 전략에 대한 깊은 관심"},
+                {"id": "", "influenceName": "임진왜란 당시 조국의 위기"},
+                {"id": "", "influenceName": "군사들과 백성들의 신뢰와 지지"},
             ],
         },
         "legacy": {
-            "impact": "조선 성리학의 이론적 체계를 확립하고, 교육의 중요성을 강조하여 많은 제자를 양성함",
-            "modern_significance": "현대 한국의 교육 철학과 자기수양 방법론에 큰 영향을 미침",
+            "id": "",
+            "impact": "조선의 해상 방어를 강화하고, 침략에 맞서 조국을 구한 영웅",
+            "modern_significance": "한국에서 국가적 영웅으로 존경받으며, 리더십과 애국심의 상징",
         },
         "historical_context": {
-            "period_background": "조선 중기의 정치적 안정기와 성리학의 발전기",
+            "id": "",
+            "period_background": "임진왜란으로 인한 조선의 위기 상황과 왜군의 대규모 침략",
             "key_events": [
-                "중종대의 정치적 변동",
-                "사화와 훈구파의 몰락",
-                "성리학의 심화 발전",
-                "서원 교육의 확대",
+                {"id": "", "eventDescription": "임진왜란 발발 (1592년)"},
+                {"id": "", "eventDescription": "옥포 해전, 한산도 대첩 승리"},
+                {"id": "", "eventDescription": "왜군의 남해 해상 봉쇄 성공"},
+                {
+                    "id": "",
+                    "eventDescription": "명량 해전에서 열세를 극복하고 대승",
+                },
+                {"id": "", "eventDescription": "노량 해전에서 전사"},
             ],
         },
     }
 
     persona2_data = {
         "basic_info": {
-            "name": "버지니아 울프",
-            "birth_death": "1882-1941",
-            "era": "빅토리아 후기-모더니즘",
-            "nationality": "영국",
-            "gender": "여성",
+            "id": "",
+            "name": "고죠 사토루",
+            "birth_death": "1989-현재",
+            "era": "현대",
+            "nationality": "일본",
+            "gender": "남성",
         },
         "professional": {
-            "primary_occupation": "소설가, 에세이스트",
-            "other_roles": ["페미니스트", "출판인", "문학 비평가"],
+            "id": "",
+            "primary_occupation": "주술사, 교사",
+            "other_roles": [
+                {"id": "", "roleName": "스승"},
+                {"id": "", "roleName": "강사"},
+            ],
             "major_achievements": [
-                "『댈러웨이 부인』 집필",
-                "『자기만의 방』 출간",
-                "호가스 출판사 설립",
-                "모더니즘 문학의 혁신",
+                {"id": "", "achievementName": "무한을 다루는 주술사"},
+                {"id": "", "achievementName": "사상 최강의 주술사로 인정받음"},
+                {"id": "", "achievementName": "특급 주령 다수 봉인 및 제압"},
+                {
+                    "id": "",
+                    "achievementName": "도쿄 주술고등전문학교 교사로 활동하며 뛰어난 제자를 양성",
+                },
             ],
         },
         "personal": {
-            "education": "킹스 칼리지 런던에서 그리스어와 역사 학습",
-            "background": "지적인 중산층 가정에서 성장, 블룸즈버리 그룹의 중심인물",
+            "id": "",
+            "education": "도쿄 주술고등전문학교 졸업",
+            "background": "천부적인 재능을 타고난 주술사로, 고죠 가문의 계승자",
             "personality_traits": [
-                "예민하고 섬세한 감수성",
-                "진보적 사고방식",
-                "실험적이고 혁신적인 성향",
-                "내면의 갈등과 우울",
+                {"id": "", "traitName": "자신감 넘치는 태도"},
+                {"id": "", "traitName": "냉철하면서도 유머러스한 성격"},
+                {"id": "", "traitName": "정의감이 강하고 동료를 소중히 여김"},
+                {"id": "", "traitName": "위험에도 두려움 없이 행동"},
             ],
             "influences": [
-                "빅토리아 시대의 사회적 제약",
-                "여성의 권리 신장 운동",
-                "심리학의 발전",
-                "1차 세계대전",
+                {"id": "", "influenceName": "고죠 가문의 전통과 유산"},
+                {"id": "", "influenceName": "무한의 주술 기술"},
+                {"id": "", "influenceName": "주술 세계의 갈등과 불의"},
+                {"id": "", "influenceName": "제자들과 동료들에 대한 책임감"},
             ],
         },
         "legacy": {
-            "impact": "현대 소설의 기법을 혁신하고 페미니즘 문학의 기반을 마련",
-            "modern_significance": "현대 여성 문학과 실험적 서사 기법에 지속적인 영향을 미침",
+            "id": "",
+            "impact": "주술 세계의 균형을 유지하며 강력한 힘으로 악을 억제함",
+            "modern_significance": "미래 주술사들에게 큰 영향을 끼치며, 정의와 강함의 상징이 됨",
         },
         "historical_context": {
-            "period_background": "빅토리아 시대 말기부터 모더니즘 시대까지의 급격한 사회 변화기",
+            "id": "",
+            "period_background": "주령과의 싸움이 지속되는 현대 일본",
             "key_events": [
-                "여성 참정권 운동",
-                "제1차 세계대전",
-                "모더니즘 운동의 발전",
-                "정신의학의 발전",
+                {"id": "", "eventDescription": "수많은 특급 주령과의 전투"},
+                {
+                    "id": "",
+                    "eventDescription": "교토와 도쿄 주술사들의 대립 완화에 기여",
+                },
+                {"id": "", "eventDescription": "숙명의 적과의 대립"},
+                {
+                    "id": "",
+                    "eventDescription": "특급 주령 '스쿠나'와 관련된 사건에 깊게 관여",
+                },
             ],
         },
     }
@@ -294,7 +353,8 @@ def main():
 
     dialogue_system = DialogueSystem(persona1, persona2)
 
-    user_concern = "회사 상사에게 받는 스트레스를 어떻게 해결해야 할까요?"
+    # 임시 사용자 질문
+    user_concern = "제가 뭘 좋아하고 잘하는 건지 모르겠습니다. 두 분은 어떻게 자신의 장점을 발견하셨나요?"
     dialogue_system.generate_dialogue(user_concern)
 
 
