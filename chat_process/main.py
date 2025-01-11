@@ -79,15 +79,30 @@ class Persona:
 
 
 class DialogueSystem:
-    def __init__(self, persona1: Persona, persona2: Persona):
+    def __init__(
+        self,
+        persona1: Persona,
+        persona2: Persona,
+        connection_manager=None,
+        room_id=None,
+    ):
         """
         대화 시스템 초기화
         """
         self.persona1 = persona1
         self.persona2 = persona2
+        self.connection_manager = connection_manager
+        self.room_id = room_id
         self.console = Console()  # 임시 마크다운 출력용
 
-    def generate_dialogue(
+    async def send_dialogue_message(self, message: dict):
+        """
+        웹소켓을 통해 대화 메시지 전송
+        """
+        if self.connection_manager and self.room_id:
+            await self.connection_manager.broadcast_to_room(message, self.room_id)
+
+    async def generate_dialogue(
         self, user_concern: str, num_turns: int = 3
     ) -> Tuple[List[Dict], str]:
         """
@@ -139,19 +154,20 @@ class DialogueSystem:
                 messages=dialogue_messages + [{"role": "user", "content": prompt}],
             )
 
-            # GPT 응답에서 화자 이름 제거
+            # GPT 응답에서 화자 이름 및 양끝 제거
             content = response.choices[0].message.content
             speaker_name = current_persona.basic_info.get("name")
-            content = content.replace(f"{speaker_name}: ", "")
-
-            # GPT 응답에서 양 끝의 큰따옴표 제거
-            content = content.strip('"')
+            content = content.replace(f"{speaker_name}: ", "").strip('"')
 
             dialogue_turn = {
                 "speaker": speaker_name,
                 "content": content,
+                "timestamp": datetime.now().isoformat(),
             }
             dialogue.append(dialogue_turn)
+
+            if self.connection_manager and self.room_id:
+                await self.send_dialogue_message(dialogue_turn)
 
             # 임시 마크다운 출력용
             self.console.print(

@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 import httpx
 import psycopg2
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from psycopg2.extras import RealDictCursor, register_uuid
 from pydantic import BaseModel
 
@@ -32,6 +32,33 @@ DATABASE_CONFIG = {
     "host": os.getenv("DB_URL"),
     "port": "6543",
 }
+
+
+# 웹소켓 연결 관리자
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Dict[uuid.UUID, Set[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, room_id: uuid.UUID):
+        await websocket.accept()
+        if room_id not in self.active_connections:
+            self.active_connections[room_id] = set()
+        self.active_connections[room_id].add(websocket)
+
+    def disconnect(self, websocket: WebSocket, room_id: uuid.UUID):
+        if room_id in self.active_connections:
+            self.active_connections[room_id].remove(websocket)
+            if not self.active_connections[room_id]:
+                del self.active_connections[room_id]
+
+    async def broadcast_to_room(self, message: dict, room_id: uuid.UUID):
+        if room_id in self.active_connections:
+            for connection in self.active_connections[room_id]:
+                await connection.send_json(message)
+
+
+# 전역 ConnectionManager 인스턴스
+manager = ConnectionManager()
 
 
 # 데이터베이스 연결 함수
@@ -89,6 +116,17 @@ async def fetch_persona_id_by_name(name: str) -> uuid.UUID:
         return data["person_id"]
 
 
+# 웹소켓 엔드포인트
+@app.websocket("/ws/{room_id}")
+async def websocket_endpoint(websocket: WebSocket, room_id: uuid.UUID):
+    await manager.connect(websocket, room_id)
+    try:
+        while True:
+            await websocket.receive_text()  # 클라이언트의 메시지 대기
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, room_id)
+
+
 # API 엔드포인트
 @app.post("/chat-rooms/")
 async def create_chat_room(room_data: ChatRoomCreate):
@@ -133,6 +171,36 @@ async def create_chat_room(room_data: ChatRoomCreate):
         conn.close()
 
 
+async def save_and_broadcast_message(
+    conn, room_id: uuid.UUID, sender_type: str, sender_id: uuid.UUID, content: str
+):
+    """메시지 저장 및 브로드캐스트"""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO chat_messages (room_id, sender_type, sender_id, content)
+        VALUES (%s, %s, %s, %s)
+        RETURNING message_id, content, sender_type, created_at
+        """,
+        (room_id, sender_type, sender_id, content),
+    )
+
+    message = cur.fetchone()
+
+    # 웹소켓으로 메시지 전송
+    await manager.broadcast_to_room(
+        {
+            "message_id": str(message["message_id"]),
+            "content": message["content"],
+            "sender_type": message["sender_type"],
+            "created_at": message["created_at"].isoformat(),
+        },
+        room_id,
+    )
+
+    return message
+
+
 @app.post("/chat-rooms/{room_id}/messages/")
 async def create_message(
     room_id: uuid.UUID, message: MessageCreate, user_id: uuid.UUID
@@ -159,17 +227,10 @@ async def create_message(
                 status_code=404, detail="채팅방을 찾을 수 없거나 비활성 상태입니다"
             )
 
-        # 사용자 메시지 저장
-        cur.execute(
-            """
-            INSERT INTO chat_messages (room_id, sender_type, sender_id, content)
-            VALUES (%s, 'USER', %s, %s)
-            RETURNING message_id, content, sender_type, created_at
-            """,
-            (room_id, user_id, message.content),
+        # 사용자 메시지 저장 및 브로드캐스트
+        user_message = await save_and_broadcast_message(
+            conn, room_id, "USER", user_id, message.content
         )
-
-        user_message = cur.fetchone()
 
         # 채팅방의 페르소나 정보 조회
         cur.execute(
@@ -188,32 +249,28 @@ async def create_message(
         persona2_data = await fetch_persona_data(personas[1]["person_id"])
 
         # DialogueSystem을 사용하여 토론 응답 생성
-        dialogue_system = DialogueSystem(Persona(persona1_data), Persona(persona2_data))
+        dialogue_system = DialogueSystem(
+            Persona(persona1_data),
+            Persona(persona2_data),
+            connection_manager=manager,
+            room_id=room_id,
+        )
 
-        dialogue, summary = dialogue_system.generate_dialogue(
+        # 대화 생성
+        dialogue, summary = await dialogue_system.generate_dialogue(
             message.content, num_turns=1
         )
 
-        # AI 응답들 저장
+        # AI 응답들 저장 및 브로드캐스트
         for turn in dialogue:
             sender_id = await fetch_persona_id_by_name(turn["speaker"])
             sender_type = "AI1" if turn["speaker"] == persona1_data["name"] else "AI2"
-            cur.execute(
-                """
-                INSERT INTO chat_messages (room_id, sender_type, sender_id, content)
-                VALUES (%s, %s, %s, %s)
-                """,
-                (room_id, sender_type, sender_id, turn["content"]),
+            await save_and_broadcast_message(
+                conn, room_id, sender_type, sender_id, turn["content"]
             )
 
         conn.commit()
-        return {
-            "message_id": user_message["message_id"],
-            "content": user_message["content"],
-            "sender_type": user_message["sender_type"],
-            "created_at": user_message["created_at"],
-            "ai_responses": dialogue,
-        }
+        return {"status": "success", "message": "메시지가 성공적으로 처리되었습니다"}
 
     except Exception as e:
         conn.rollback()
