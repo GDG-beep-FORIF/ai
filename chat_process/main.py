@@ -105,7 +105,8 @@ class DialogueSystem:
 상대 페르소나는 {other_persona.basic_info.get('name')}입니다.
 
 이전 대화를 고려하여, {current_persona.basic_info.get('name')}의 관점에서 대화를 이어가세요.
-페르소나의 시대적 배경, 경험, 성격을 반영한 자연스러운 대화를 생성해주세요."""
+페르소나의 시대적 배경, 경험, 성격을 반영한 자연스러운 대화를 생성해주세요.
+현재 턴이 {turn + 1}/{num_turns * 2}입니다. 마지막 턴에 가까워질수록 대화를 자연스럽게 마무리해주세요."""
 
             response = client.chat.completions.create(
                 model="gpt-4o",
